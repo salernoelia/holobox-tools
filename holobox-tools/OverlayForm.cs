@@ -37,6 +37,7 @@ namespace holobox_tools
             // Timer initialisieren, um alle 100 ms ein OSC-Signal zu senden
             touchTimer = new System.Timers.Timer(100);
             touchTimer.Elapsed += TouchTimer_Elapsed;
+            touchTimer.AutoReset = true;
         }
 
         private void MakeVisible()
@@ -48,7 +49,7 @@ namespace holobox_tools
             SetWindowLong(this.Handle, GWL_EXSTYLE, exStyle);
 
             // Setzen Sie die Opacity für Sichtbarkeit
-            this.Opacity = 0.2; // 20% transparent
+            this.Opacity = 0.01; // 20% transparent
 
             // Optional: Setzen Sie eine Hintergrundfarbe für bessere Sichtbarkeit
             this.BackColor = System.Drawing.Color.Blue;
@@ -88,7 +89,8 @@ namespace holobox_tools
         // Event-Handler für Linksklicks
         private void OverlayForm_MouseDown(object sender, MouseEventArgs e)
         {
-            if (e.Button == MouseButtons.Left)
+            if (e.Button == MouseButtons.Left || e.Button == MouseButtons.Right)
+
             {
                 // Erfassen der Position des Klicks
                 int x = e.X;
@@ -107,7 +109,8 @@ namespace holobox_tools
         // Event-Handler für das Loslassen des Mausklicks
         private void OverlayForm_MouseUp(object sender, MouseEventArgs e)
         {
-            if (e.Button == MouseButtons.Left)
+            if (e.Button == MouseButtons.Left || e.Button == MouseButtons.Right)
+
             {
                 // Erfassen der Position des Klicks
                 int x = e.X;

@@ -109,6 +109,7 @@ namespace holobox_tools
             }
         }
 
+
         private void SendOSCTouch(bool touched, int x, int y)
         {
             // Erstellen der OSC-Nachricht
@@ -133,8 +134,11 @@ namespace holobox_tools
 
         private void StartStreaming()
         {
-            // Verwerfen der vorherigen UDPSender-Instanz, falls vorhanden
-            oscSender = null;
+            // Schließen vorheriger Verbindungen, falls vorhanden
+            if (oscSender != null)
+            {
+                oscSender = null;
+            }
 
             string oscAddress = txtOSCAddress.Text;
             if (!int.TryParse(txtOSCPort.Text, out int oscPort))
@@ -142,9 +146,9 @@ namespace holobox_tools
                 oscPort = 8000; // Standardport
             }
 
-            // Erstellen einer neuen UDPSender-Instanz
+            // OSC-Sender initialisieren
             oscSender = new UDPSender(oscAddress, oscPort);
-            Log($"OSC Sender neu initialisiert mit Adresse {oscAddress} und Port {oscPort}.");
+            Log($"OSC-Sender initialisiert: Adresse {oscAddress}, Port {oscPort}");
 
             // Starten des Video-Streamings
             if (videoDevices.Count > 0)
@@ -152,7 +156,7 @@ namespace holobox_tools
                 videoSource = new VideoCaptureDevice(videoDevices[cmbWebcam.SelectedIndex].MonikerString);
                 videoSource.NewFrame += VideoSource_NewFrame;
                 videoSource.Start();
-                Log("Video-Streaming gestartet.");
+                Log($"Video-Streaming gestartet. Sende auf IP: {oscAddress}, Port: {videoPort}");
             }
             else
             {
@@ -169,13 +173,14 @@ namespace holobox_tools
                 waveIn.StartRecording();
 
                 audioClient = new UdpClient();
-                Log("Audio-Streaming gestartet.");
+                Log($"Audio-Streaming gestartet. Sende auf IP: {oscAddress}, Port: 5006");
             }
             else
             {
                 Log("Keine Audio-Geräte gefunden.");
             }
         }
+
 
         private void StopStreaming()
         {
@@ -212,16 +217,38 @@ namespace holobox_tools
         {
             // Konvertieren des Frames zu JPEG und Senden über UDP
             Bitmap bitmap = (Bitmap)eventArgs.Frame.Clone();
+
+            // Optional: Skalieren des Bildes auf eine kleinere Auflösung
+            int newWidth = 320; // Beispielbreite
+            int newHeight = 240; // Beispielhöhe
+            Bitmap resizedBitmap = new Bitmap(bitmap, new Size(newWidth, newHeight));
+
             using (var ms = new System.IO.MemoryStream())
             {
-                bitmap.Save(ms, System.Drawing.Imaging.ImageFormat.Jpeg);
+                // Speichern mit niedrigerer JPEG-Qualität
+                System.Drawing.Imaging.ImageCodecInfo jpgEncoder = GetEncoder(System.Drawing.Imaging.ImageFormat.Jpeg);
+                System.Drawing.Imaging.Encoder encoder = System.Drawing.Imaging.Encoder.Quality;
+                System.Drawing.Imaging.EncoderParameters encoderParams = new System.Drawing.Imaging.EncoderParameters(1);
+                System.Drawing.Imaging.EncoderParameter encoderParam = new System.Drawing.Imaging.EncoderParameter(encoder, 50L); // Qualität von 50
+                encoderParams.Param[0] = encoderParam;
+
+                resizedBitmap.Save(ms, jpgEncoder, encoderParams);
                 byte[] imageBytes = ms.ToArray();
+
                 try
                 {
                     if (videoClient == null)
                     {
                         videoClient = new UdpClient();
                     }
+
+                    // Überprüfen der Größe des Pakets
+                    if (imageBytes.Length > 65000) // Etwas unter dem UDP-Limit
+                    {
+                        Log($"Fehler beim Video-Streaming: Paketgröße {imageBytes.Length} Bytes überschreitet das Limit.");
+                        return;
+                    }
+
                     videoClient.Send(imageBytes, imageBytes.Length, oscSender.Address, videoPort);
                 }
                 catch (Exception ex)
@@ -229,8 +256,26 @@ namespace holobox_tools
                     Log($"Fehler beim Video-Streaming: {ex.Message}");
                 }
             }
+
+            // Ressourcen freigeben
             bitmap.Dispose();
+            resizedBitmap.Dispose();
         }
+
+        // Methode zum Abrufen des Encoders
+        private System.Drawing.Imaging.ImageCodecInfo GetEncoder(System.Drawing.Imaging.ImageFormat format)
+        {
+            System.Drawing.Imaging.ImageCodecInfo[] codecs = System.Drawing.Imaging.ImageCodecInfo.GetImageDecoders();
+            foreach (System.Drawing.Imaging.ImageCodecInfo codec in codecs)
+            {
+                if (codec.FormatID == format.Guid)
+                {
+                    return codec;
+                }
+            }
+            return null;
+        }
+
 
         private void WaveIn_DataAvailable(object sender, WaveInEventArgs e)
         {
@@ -283,6 +328,11 @@ namespace holobox_tools
         }
 
         private void cmbWebcam_SelectedIndexChanged(object sender, EventArgs e)
+        {
+
+        }
+
+        private void txtOSCPort_TextChanged(object sender, EventArgs e)
         {
 
         }
